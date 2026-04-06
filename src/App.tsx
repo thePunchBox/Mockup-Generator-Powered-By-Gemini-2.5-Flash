@@ -1,14 +1,13 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { GoogleGenAI } from '@google/genai';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Upload, 
-  Image as ImageIcon, 
-  X, 
-  Wand2, 
-  Loader2, 
-  Download, 
+import {
+  Upload,
+  Image as ImageIcon,
+  X,
+  Wand2,
+  Loader2,
+  Download,
   Trash2,
   CheckCircle2,
   LayoutTemplate,
@@ -18,8 +17,7 @@ import {
 } from 'lucide-react';
 import { cn } from './lib/utils';
 
-// Initialize Gemini API
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+// Initialize Gemini API lazily to prevent crash on boot if key is missing
 
 interface UploadedScreen {
   id: string;
@@ -127,13 +125,13 @@ export default function App() {
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const newScreens: UploadedScreen[] = [];
-    
+
     for (const file of acceptedFiles) {
       try {
         const base64 = await fileToBase64(file);
         const previewUrl = URL.createObjectURL(file);
         const id = Math.random().toString(36).substring(7);
-        
+
         newScreens.push({
           id,
           file,
@@ -144,9 +142,9 @@ export default function App() {
         console.error('Error processing file:', err);
       }
     }
-    
+
     setScreens(prev => [...prev, ...newScreens]);
-    
+
     // Auto-select if it's the first upload
     if (screens.length === 0 && newScreens.length > 0) {
       setSelectedScreenIds(new Set([newScreens[0].id]));
@@ -158,7 +156,7 @@ export default function App() {
     accept: {
       'image/*': ['.png', '.jpg', '.jpeg', '.webp']
     }
-  });
+  } as any);
 
   const toggleScreenSelection = (id: string) => {
     setSelectedScreenIds(prev => {
@@ -221,35 +219,19 @@ export default function App() {
 
     const promises = selectedScreens.map(async (screen) => {
       try {
-        const parts: any[] = [
-          {
-            inlineData: {
-              data: screen.base64,
-              mimeType: screen.file.type || 'image/png'
-            }
-          },
-          { text: aspectRatio === 'custom' ? `${prompt} (Generate with exact aspect ratio ${customWidth}:${customHeight})` : prompt }
-        ];
-
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash-image',
-          contents: { parts },
-          config: {
-            imageConfig: {
-              aspectRatio: finalAspectRatio as any
-            }
-          }
+        const finalPrompt = aspectRatio === 'custom' ? `${prompt} (Generate with exact aspect ratio ${customWidth}:${customHeight})` : prompt;
+        const response: HTMLImageElement = await (window as any).puter.ai.txt2img(finalPrompt, {
+          model: 'gemini-3-pro-image-preview',
+          input_images: [`data:${screen.file.type || 'image/png'};base64,${screen.base64}`],
+          ratio: finalAspectRatio.includes(':') ? { 
+            w: parseInt(finalAspectRatio.split(':')[0]), 
+            h: parseInt(finalAspectRatio.split(':')[1]) 
+          } : undefined
         });
 
         let newImageUrl: string | null = null;
-        
-        if (response.candidates && response.candidates[0]?.content?.parts) {
-          for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) {
-              newImageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-              break;
-            }
-          }
+        if (response && response.src) {
+            newImageUrl = response.src;
         }
 
         if (newImageUrl) {
@@ -276,7 +258,7 @@ export default function App() {
 
     setIsGenerating(false);
     setGenerationProgress({ current: 0, total: 0 });
-    
+
     if (failed > 0) {
       setError(`Failed to generate ${failed} mockup(s).`);
     }
@@ -306,35 +288,19 @@ export default function App() {
         finalAspectRatio = `${w / divisor}:${h / divisor}`;
       }
 
-      const parts: any[] = [
-        {
-          inlineData: {
-            data: graphic.sourceScreen.base64,
-            mimeType: graphic.sourceScreen.file.type || 'image/png'
-          }
-        },
-        { text: graphic.aspectRatio.includes('x') ? `${graphic.prompt} (Generate with exact aspect ratio ${graphic.aspectRatio.replace('x', ':')})` : graphic.prompt }
-      ];
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash-image',
-        contents: { parts },
-        config: {
-          imageConfig: {
-            aspectRatio: finalAspectRatio as any
-          }
-        }
+      const finalPrompt = graphic.aspectRatio.includes('x') ? `${graphic.prompt} (Generate with exact aspect ratio ${graphic.aspectRatio.replace('x', ':')})` : graphic.prompt;
+      const response: HTMLImageElement = await (window as any).puter.ai.txt2img(finalPrompt, {
+        model: 'gemini-3-pro-image-preview',
+        input_images: [`data:${graphic.sourceScreen.file.type || 'image/png'};base64,${graphic.sourceScreen.base64}`],
+        ratio: finalAspectRatio.includes(':') ? { 
+            w: parseInt(finalAspectRatio.split(':')[0]), 
+            h: parseInt(finalAspectRatio.split(':')[1]) 
+        } : undefined
       });
 
       let newImageUrl: string | null = null;
-      
-      if (response.candidates && response.candidates[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-          if (part.inlineData) {
-            newImageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-            break;
-          }
-        }
+      if (response && response.src) {
+          newImageUrl = response.src;
       }
 
       if (newImageUrl) {
@@ -384,13 +350,13 @@ export default function App() {
               <h2 className="text-lg font-black uppercase">1. Upload Screens</h2>
               <span className="font-bold text-sm bg-white border-2 border-black px-2 py-0.5 rounded-md shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">{screens.length}</span>
             </div>
-            
-            <div 
-              {...getRootProps()} 
+
+            <div
+              {...getRootProps()}
               className={cn(
                 "border-4 border-dashed border-black rounded-2xl p-6 text-center cursor-pointer transition-all duration-200 ease-out bg-white",
-                isDragActive 
-                  ? "bg-[#ffc900] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] scale-[1.02]" 
+                isDragActive
+                  ? "bg-[#ffc900] shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] scale-[1.02]"
                   : "hover:bg-[#93c5fd] hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1"
               )}
             >
@@ -422,17 +388,17 @@ export default function App() {
                         onClick={() => toggleScreenSelection(screen.id)}
                         className={cn(
                           "relative group rounded-xl overflow-hidden cursor-pointer border-4 transition-all duration-200",
-                          isSelected 
-                            ? "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -translate-y-1" 
+                          isSelected
+                            ? "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] -translate-y-1"
                             : "border-transparent hover:border-black hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-1"
                         )}
                       >
-                        <img 
-                          src={screen.previewUrl} 
-                          alt="Uploaded screen" 
+                        <img
+                          src={screen.previewUrl}
+                          alt="Uploaded screen"
                           className="w-full h-auto object-contain bg-gray-100 block"
                         />
-                        
+
                         {isSelected && (
                           <div className="absolute top-2 left-2 bg-[#ffc900] border-2 border-black rounded-full p-1 shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
                             <CheckCircle2 className="w-4 h-4 text-black" strokeWidth={3} />
@@ -492,7 +458,7 @@ export default function App() {
                     className="w-full flex-1 min-h-[128px] bg-white border-4 border-black rounded-2xl p-4 text-black font-medium text-base placeholder:text-gray-500 focus:outline-none focus:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-shadow resize-none"
                   />
                 </div>
-                
+
                 <div className="w-full sm:w-64 flex flex-col gap-4">
                   <div className="space-y-2">
                     <label className="font-black text-sm uppercase">Aspect Ratio</label>
@@ -547,12 +513,12 @@ export default function App() {
                     {isGenerating ? (
                       <div className="flex flex-col items-center w-full gap-2">
                         <div className="flex items-center gap-2">
-                          <Loader2 className="w-6 h-6 animate-spin" strokeWidth={3} /> 
+                          <Loader2 className="w-6 h-6 animate-spin" strokeWidth={3} />
                           <span>Generating ({generationProgress.current}/{generationProgress.total})</span>
                         </div>
                         {generationProgress.total > 1 && (
                           <div className="w-full h-2 bg-white border-2 border-black rounded-full overflow-hidden">
-                            <div 
+                            <div
                               className="h-full bg-[#93c5fd] transition-all duration-300"
                               style={{ width: `${(generationProgress.current / generationProgress.total) * 100}%` }}
                             />
@@ -561,7 +527,7 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <Wand2 className="w-6 h-6" strokeWidth={3} /> 
+                        <Wand2 className="w-6 h-6" strokeWidth={3} />
                         Generate
                       </div>
                     )}
@@ -570,7 +536,7 @@ export default function App() {
               </div>
 
               {error && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="max-w-5xl mx-auto mt-6 bg-[#ff4d4d] border-4 border-black text-white px-4 py-3 rounded-xl font-bold text-sm flex items-start gap-3 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
@@ -613,12 +579,12 @@ export default function App() {
                             backgroundSize: '20px 20px',
                             backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
                           }} />
-                          <img 
-                            src={graphic.url} 
+                          <img
+                            src={graphic.url}
                             alt={graphic.prompt}
                             className="relative z-10 w-full h-auto max-h-[400px] object-contain"
                           />
-                          
+
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20 flex items-center justify-center gap-4 backdrop-blur-sm">
                             <button
                               onClick={() => setViewingGraphic(graphic)}
@@ -646,11 +612,11 @@ export default function App() {
                                 {graphic.aspectRatio}
                               </span>
                               {graphic.sourceScreen && (
-                                <img 
-                                  src={graphic.sourceScreen.previewUrl} 
-                                  alt="Source" 
-                                  className="w-6 h-6 object-cover border-2 border-black rounded-md shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]" 
-                                  title="Original Source Screen" 
+                                <img
+                                  src={graphic.sourceScreen.previewUrl}
+                                  alt="Source"
+                                  className="w-6 h-6 object-cover border-2 border-black rounded-md shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
+                                  title="Original Source Screen"
                                 />
                               )}
                             </div>
