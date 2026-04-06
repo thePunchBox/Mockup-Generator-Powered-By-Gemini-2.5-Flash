@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+}
+
+body {
+  background-color: #f4f0ea;
+  color: #000000;
+  background-image: radial-gradient(#000000 1.5px, transparent 1.5px);
+  background-size: 24px 24px;
+}
+
+/* Custom scrollbar for neo-brutalism */
+::-webkit-scrollbar {
+  width: 16px;
+  height: 16px;
+}
+::-webkit-scrollbar-track {
+  background: #ffffff;
+  border-left: 4px solid #000000;
+}
+::-webkit-scrollbar-thumb {
+  background: #93c5fd;
+  border: 4px solid #000000;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #ffc900;
+}
+

@@ -1,0 +1,5 @@
+{
+  "name": "Mockup Generator",
+  "description": "A retrofuturistic tool to generate beautiful mockups from Figma screens using Gemini 2.5 Flash.",
+  "requestFramePermissions": []
+}
